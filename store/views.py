@@ -10,6 +10,7 @@ import hashlib
 import base64
 import urllib.request
 import json
+import requests
 
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
@@ -849,3 +850,132 @@ def download_invoice(request, order_id):
     p.save()
 
     return response
+
+
+def get_paypal_base_url():
+    if settings.PAYPAL_MODE == "live":
+        return "https://api-m.paypal.com"
+    return "https://api-m.sandbox.paypal.com"
+
+
+def get_paypal_access_token():
+    url = f"{get_paypal_base_url()}/v1/oauth2/token"
+
+    response = requests.post(
+        url,
+        auth=(settings.PAYPAL_CLIENT_ID, settings.PAYPAL_CLIENT_SECRET),
+        headers={"Accept": "application/json"},
+        data={"grant_type": "client_credentials"},
+    )
+
+    response.raise_for_status()
+    return response.json()["access_token"]
+
+
+def paypal_checkout(request, order_id):
+    order = get_object_or_404(Order, id=order_id)
+
+    if order.is_paid:
+        return redirect("checkout_success")
+
+    access_token = get_paypal_access_token()
+
+    url = f"{get_paypal_base_url()}/v2/checkout/orders"
+
+    data = {
+        "intent": "CAPTURE",
+        "purchase_units": [
+            {
+                "reference_id": str(order.id),
+                "amount": {
+                    "currency_code": "GBP",
+                    "value": str(order.total_price),
+                },
+            }
+        ],
+        "application_context": {
+            "brand_name": "CROWNVII",
+            "landing_page": "LOGIN",
+            "user_action": "PAY_NOW",
+            "return_url": request.build_absolute_uri(
+                f"/paypal/success/?order_id={order.id}"
+            ),
+            "cancel_url": request.build_absolute_uri(
+                f"/paypal/cancel/?order_id={order.id}"
+            ),
+        },
+    }
+
+    response = requests.post(
+        url,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {access_token}",
+        },
+        json=data,
+    )
+
+    response.raise_for_status()
+    paypal_order = response.json()
+
+    order.paypal_order_id = paypal_order["id"]
+    order.save()
+
+    for link in paypal_order["links"]:
+        if link["rel"] == "approve":
+            return redirect(link["href"])
+
+    return redirect("checkout")
+
+
+def paypal_success(request):
+    order_id = request.GET.get("order_id")
+    token = request.GET.get("token")
+
+    order = get_object_or_404(Order, id=order_id)
+
+    if order.is_paid:
+        return redirect("checkout_success")
+
+    access_token = get_paypal_access_token()
+
+    url = f"{get_paypal_base_url()}/v2/checkout/orders/{token}/capture"
+
+    response = requests.post(
+        url,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {access_token}",
+        },
+    )
+
+    response.raise_for_status()
+    capture_data = response.json()
+
+    capture_id = (
+        capture_data["purchase_units"][0]["payments"]["captures"][0]["id"]
+    )
+
+    order.is_paid = True
+    order.status = "paid"
+    order.paypal_capture_id = capture_id
+    order.save()
+
+    Invoice.objects.get_or_create(
+        order=order,
+        defaults={"invoice_number": f"INV-{order.id:05d}"}
+    )
+
+    try:
+        send_order_confirmation_email(order, {})
+    except Exception as e:
+        print("PayPal email failed:", str(e))
+
+    request.session["cart"] = {}
+    request.session.modified = True
+
+    return render(request, "store/checkout_success.html")
+
+
+def paypal_cancel(request):
+    return redirect("checkout")

@@ -18,6 +18,8 @@ urlpatterns = [
     path('checkout/success/', views.checkout_success, name='checkout_success'),
     path('stripe/webhook/', views.stripe_webhook, name='stripe_webhook'),
     path("checkout/paypal/<int:order_id>/", views.paypal_checkout, name="paypal_checkout"),
+    path("paypal/success/", views.paypal_success, name="paypal_success"),
+    path("paypal/cancel/", views.paypal_cancel, name="paypal_cancel"),
 
     # Information Pages
     path('contact/', views.contact, name='contact'),
