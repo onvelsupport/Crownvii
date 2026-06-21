@@ -17,6 +17,7 @@ urlpatterns = [
     path('checkout/', views.checkout_view, name='checkout'),
     path('checkout/success/', views.checkout_success, name='checkout_success'),
     path('stripe/webhook/', views.stripe_webhook, name='stripe_webhook'),
+    path("checkout/paypal/<int:order_id>/", views.paypal_checkout, name="paypal_checkout"),
 
     # Information Pages
     path('contact/', views.contact, name='contact'),

@@ -108,6 +108,11 @@
     text-transform: uppercase;
   }
 
+  .paypal-btn {
+    background: #ffc439;
+    color: #111;
+}
+
   .place-order-btn {
     display: block;
     width: 100%;
@@ -255,12 +260,16 @@ document.addEventListener("DOMContentLoaded", function () {
         <h2>Choose Payment Method</h2>
 
         <a href="{% url 'stripe_checkout' order.id %}" class="payment-btn">
-            Pay with Stripe
-        </a>
+    Pay with Stripe
+</a>
 
-        <a href="{% url 'square_checkout' order.id %}" class="payment-btn">
-            Pay with Square
-        </a>
+<a href="{% url 'square_checkout' order.id %}" class="payment-btn">
+    Pay with Square
+</a>
+
+<a href="{% url 'paypal_checkout' order.id %}" class="payment-btn paypal-btn">
+    Pay with PayPal
+</a>
 
         <button type="button" onclick="history.back()" class="cancel-btn" style="background:none;border:none;cursor:pointer;">
     Cancel
